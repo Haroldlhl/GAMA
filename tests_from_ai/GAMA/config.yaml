@@ -1,0 +1,73 @@
+# 项目基本信息
+project:
+  name: "reinfore learning for uav search---Graph Attention for Multi-drone Assignment"
+  version: "1.0.0"
+  seed: 42  # 随机种子，保证实验可复现
+
+# 地图文件配置
+map_file: "/home/li/code/drl/tests_from_ai/GAMA/map.json"
+
+# 数据配置
+data:
+  train_dir: "./data/train"
+  val_dir: "./data/val"
+  test_dir: "./data/test"
+  batch_size: 32
+  val_batch_size: 64
+  num_workers: 4  # 数据加载线程数
+  image_size: [224, 224]  # 图像尺寸 (H, W)
+  mean: [0.485, 0.456, 0.406]  # 图像归一化均值 (RGB)
+  std: [0.229, 0.224, 0.225]   # 图像归一化标准差
+  augmentations:  # 数据增强配置
+    random_flip: True
+    random_rotate: 15
+    color_jitter: 0.2
+
+# 模型配置
+model:
+  type: "ResNet50"  # 模型类型
+  num_classes: 10  # 类别数
+  pretrained: True  # 是否使用预训练权重
+  pretrained_path: "./pretrained/resnet50.pth"  # 预训练权重路径（可选）
+  freeze_backbone: False  # 是否冻结 backbone
+
+# 训练配置
+training:
+  optimizer:
+    type: "Adam"  # 优化器类型
+    lr: 0.001     # 初始学习率
+    weight_decay: 0.0001  # 权重衰减
+    betas: [0.9, 0.999]   # Adam 特定参数
+  
+  scheduler:  # 学习率调度器
+    type: "CosineAnnealingLR"
+    T_max: 50  # 周期数
+  
+  num_epochs: 50  # 训练总轮数
+  resume: False   # 是否从断点恢复训练
+  resume_path: "./checkpoints/latest.pth"  # 断点路径（可选）
+  device: "cuda"  # 训练设备 ("cuda" 或 "cpu")
+  mixed_precision: True  # 是否使用混合精度训练
+
+# 验证配置
+validation:
+  interval: 1  # 每多少轮验证一次
+  metrics: ["accuracy", "f1_score"]  # 评估指标
+
+# 日志与保存配置
+logging:
+  log_dir: "./logs"  # 日志保存路径
+  tensorboard: True  # 是否使用 tensorboard
+  print_freq: 100    # 每多少个 batch 打印一次日志
+
+checkpoint:
+  save_dir: "./checkpoints"  # 模型保存路径
+  save_interval: 5  # 每多少轮保存一次
+  keep_top_k: 3     # 保留 top k 个最优模型
+
+# 分布式训练配置（可选）
+distributed:
+  use: False
+  world_size: 2  # 总进程数
+  rank: 0        # 当前进程 rank
+  dist_url: "tcp://127.0.0.1:23456"

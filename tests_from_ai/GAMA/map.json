@@ -1,0 +1,139 @@
+{
+    "nodes": {
+        "Node_1": {
+            "id": "Node_1",
+            "type": "room",
+            "area": 100,
+            "floor": 1,
+            "unsearched_area": 100,
+            "position": [0, 0],
+            "neighbors": [],
+            "degree": 0,
+            "estimated_finish_time": 0,
+            "difficulty_factor": 1.0,
+            "allowed_uav_number": 3,
+            "searching_uav_number": 0
+        },
+        "Node_2": {
+            "id": "Node_2",
+            "type": "room",
+            "area": 100,
+            "floor": 1,
+            "unsearched_area": 100,
+            "position": [0, 0],
+            "neighbors": [],
+            "degree": 0,
+            "estimated_finish_time": 0,
+            "difficulty_factor": 1.0,
+            "allowed_uav_number": 3,
+            "searching_uav_number": 0
+        },
+        "Node_3": {
+            "id": "Node_3",
+            "type": "room",
+            "area": 100,
+            "floor": 1,
+            "unsearched_area": 100,
+            "position": [0, 0],
+            "neighbors": [],
+            "degree": 0,
+            "estimated_finish_time": 0,
+            "difficulty_factor": 1.0,
+            "allowed_uav_number": 3,
+            "searching_uav_number": 0
+        },
+        "Node_4": {
+            "id": "Node_4",
+            "type": "room",
+            "area": 100,
+            "floor": 1,
+            "unsearched_area": 100,
+            "position": [0, 0],
+            "neighbors": [],
+            "degree": 0,
+            "estimated_finish_time": 0,
+            "difficulty_factor": 1.0,
+            "allowed_uav_number": 3,
+            "searching_uav_number": 0
+        },
+        "Node_5": {
+            "id": "Node_5",
+            "type": "room",
+            "area": 100,
+            "floor": 1,
+            "unsearched_area": 100,
+            "position": [0, 0],
+            "neighbors": [],
+            "degree": 0,
+            "estimated_finish_time": 0,
+            "difficulty_factor": 1.0,
+            "allowed_uav_number": 3,
+            "searching_uav_number": 0
+        },
+        "Node_6": {
+            "id": "Node_6",
+            "type": "room",
+            "area": 100,
+            "floor": 1,
+            "unsearched_area": 100,
+            "position": [0, 0],
+            "neighbors": [],
+            "degree": 0,
+            "estimated_finish_time": 0,
+            "difficulty_factor": 1.0,
+            "allowed_uav_number": 3,
+            "searching_uav_number": 0
+        }
+    },
+    "edges": {
+        "Edge_1": {
+            "id": "Edge_1",
+            "source": "Node_1",
+            "target": "Node_2",
+            "length": 2,
+            "weight": 1.0,
+            "time_cost": 2
+        },
+        "Edge_2": {
+            "id": "Edge_2",
+            "source": "Node_1",
+            "target": "Node_3",
+            "length": 4,
+            "weight": 1.0,
+            "time_cost": 4
+        },
+        "Edge_3": {
+            "id": "Edge_3",
+            "source": "Node_2",
+            "target": "Node_4",
+            "length": 3,
+            "weight": 1.0,
+            "time_cost": 3
+        },
+        "Edge_4": {
+            "id": "Edge_4",
+            "source": "Node_2",
+            "target": "Node_6",
+            "length": 1,
+            "weight": 1.0,
+            "time_cost": 1
+        },
+        "Edge_5": {
+            "id": "Edge_5",
+            "source": "Node_6",
+            "target": "Node_5",
+            "length": 3,
+            "weight": 1.0,
+            "time_cost": 3
+        },
+        "Edge_6": {
+            "id": "Edge_6",
+            "source": "Node_3",
+            "target": "Node_5",
+            "length": 2,
+            "weight": 1.0,
+            "time_cost": 2
+        }
+    }
+}
+    
