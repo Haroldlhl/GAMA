@@ -23,8 +23,11 @@ import torch
 import torch.nn.functional as F
 from actor import Actor
 
+def node_available(node):
+    return node['allowed_uav_number'] > 0 and node['unsearched_area'] > 0
+
 class MultiDroneSearchEnv:
-    def __init__(self, drones, nodes):
+    def __init__(self, drones, nodes, distance_matrix):
         """
         初始化多无人机搜索环境
         
@@ -38,6 +41,7 @@ class MultiDroneSearchEnv:
         self.max_time = 1000.0
         self.episode_reward = 0
         self.event_queue = EventQueue()
+        self.distance_matrix = distance_matrix
         for drone in self.drones:
             self.event_queue.add_event(drone.task_end_time, drone)
         
@@ -172,7 +176,80 @@ class MultiDroneSearchEnv:
         drone_features = torch.tensor(drone_features, dtype=torch.float)
         return uav_ids, drone_features
 
-    def step(self, actions):
+    # 输入当前状态, 返回新状态和奖励
+    def act(self, state, nxt_node_id):
+        current_time = self.current_time
+
+        # 执行动作
+        target_node = state['nodes'][nxt_node_id]
+        _, act_uav = self.event_queue.get_next_event()
+        self.event_queue.remove_event(act_uav)
+
+
+        # 首先判断无人机是否在目标房间, moving 且 task end time  < current_time 则不在
+        # 如果是 task_end_time ==current_time, 但是 target_id 不为 目标. 不在
+        assert act_uav['task_end_time'] == current_time, "优先队列出问题了!"
+        if act_uav['target_id'] != target_node['id']:
+            # 无人机不在目标房间
+            act_uav['status'] = 'moving'
+            act_uav['task_end_time'] = current_time + self.distance_matrix[act_uav['current_node_id']][target_node['id']]
+            act_uav['target_id'] = target_node['id']
+            self.event_queue.add_event(act_uav['task_end_time'], act_uav)
+        else:
+            # 无人机在目标房间
+            if target_node['allowed_uav_number'] == 0 or target_node['unsearched_area'] == 0:
+                # 无法搜索, 无人机空闲
+                act_uav['status'] = 'idle'
+                act_uav['target_id'] = target_node['id']
+                act_uav['task_end_time'] = current_time + 10
+                self.event_queue.add_event(act_uav['task_end_time'], act_uav)
+            elif target_node['searching_uav_number'] == 0:
+                act_uav['status'] = 'searching'
+                act_uav['target_id'] = target_node['id']
+                target_node['searching_uav_number'] += 1
+                target_node['allowed_uav_number'] -= 1
+                estimate_end_time = target_node['unsearched_area'] / (10*target_node['searching_uav_number'])
+                act_uav['task_end_time'] = current_time + estimate_end_time
+                target_node.estimate_time = estimate_end_time+estimate_end_time
+                self.event_queue.add_event(act_uav['task_end_time'], act_uav)
+            else:
+                act_uav['target_id'] = target_node['id']
+                target_node['searching_uav_number'] += 1
+                target_node['allowed_uav_number'] -= 1
+                estimate_end_time = target_node['unsearched_area'] / (10*target_node['searching_uav_number'])
+                act_uav['task_end_time'] = current_time + estimate_end_time
+                target_node.estimate_time = estimate_end_time+estimate_end_time
+                
+                comp_drons = []
+                for drone in state['drones']:
+                    if drone['target_id'] == target_node['id'] and drone['status'] == 'searching':
+                        comp_drons.append(drone)
+                act_uav['status'] = 'searching'
+                self.event_queue.add_event(act_uav['task_end_time'], act_uav)
+
+                for drone in comp_drons:
+                    drone['task_end_time'] = current_time + estimate_end_time
+                    self.event_queue.add_event(drone['task_end_time'], drone)
+
+        
+
+        # 更新房间状态, 计算奖励
+        nxt_time, _ = self.event_queue.get_next_event()
+        elapsed_time = nxt_time - current_time
+        for node in state['nodes']:
+            node['unsearched_area'] -= elapsed_time * (10*node['searching_uav_number'])
+        
+        if act_uav['status'] == 'searching':
+            reward = 5*elapsed_time
+        elif act_uav['status'] == 'moving':
+            reward = -2*elapsed_time
+        elif act_uav['status'] == 'idle':
+            reward = -10*elapsed_time
+        
+        return state, reward
+        
+
+    def step(self, action):
         '''
         # 1. 验证输入动作
         # 2. 保存执行前的状态（用于奖励计算）
@@ -185,91 +262,48 @@ class MultiDroneSearchEnv:
         # 9. 收集信息
         '''
 
-        # 2 执行动作前状态，需要获取当前时间，
-        current_time = self.current_time
 
-        # 3. 选着动作
-        # 先对节点编码，再对无人机编码，融合编码后，通过actor网络获取动作
         state = self.get_state()
-        nxt_node_idx = Actor.forward(state, self.event_queue, current_time)
-        
         # 执行动作
-        # TODO
+        state, reward = self.act(state, action)
+        self.episode_reward = rewards
+
+        done_flag = self._is_done()
+        if done_flag:
+            self.episode_reward[:] += 50
+
+        self.current_step += 1
+        return state, reward, done_flag
 
     
-    def update(self, actions):
-        """
-        环境更新函数（step的别名）
-        """
-        return self.step(actions)
-    
-    def _compute_drone_reward(self, drone, action, prev_visited_count, prev_battery):
-        """
-        计算单个无人机的奖励
-        """
-        reward = 0
-        
-        # 搜索新节点的奖励
-        if len(drone.visited_nodes) > prev_visited_count:
-            reward += 10  # 发现新节点
-        
-        # 电池消耗惩罚
-        battery_consumed = prev_battery - drone.battery
-        reward -= battery_consumed * 0.1
-        
-        # 无效动作惩罚
-        if not drone.last_action_valid:
-            reward -= 2
-        
-        # 完成任务奖励（如果所有节点都被搜索）
-        if all(node.is_searched for node in self.nodes):
-            reward += 50
-        
-        return reward
-    
-    def _check_collisions(self):
-        """
-        检查无人机之间的碰撞
-        """
-        collisions = 0
-        for i in range(len(self.drones)):
-            for j in range(i + 1, len(self.drones)):
-                if (self.drones[i].position == self.drones[j].position and 
-                    self.drones[i].position is not None):
-                    collisions += 1
-                    # 可以在这里添加碰撞处理逻辑
-        return collisions
     
     def _is_done(self):
         """
         检查episode是否结束
         """
         # 所有节点都被搜索
-        all_searched = all(node.is_searched for node in self.nodes)
+        all_searched = all(node['unsearched_area'] == 0 for node in self.state['nodes'])
         
         # 达到最大步数
         max_steps_reached = self.current_step >= self.max_steps
         
-        # 所有无人机电量耗尽
-        all_drones_dead = all(drone.battery <= 0 for drone in self.drones)
-        
-        return all_searched or max_steps_reached or all_drones_dead
+        return all_searched or max_steps_reached
     
-    def render(self, mode='human'):
-        """
-        渲染环境状态
-        """
-        if mode == 'human':
-            print(f"Step: {self.current_step}")
-            print(f"Total Reward: {self.episode_reward}")
-            print("Drones:")
-            for i, drone in enumerate(self.drones):
-                print(f"  Drone {i}: Pos={drone.position}, Battery={drone.battery}, "
-                      f"Node={drone.current_node}, Status={drone.status}")
-            print("Nodes:")
-            for i, node in enumerate(self.nodes):
-                print(f"  Node {i}: Pos={node.position}, Searched={node.is_searched}, "
-                      f"Priority={node.search_priority}")
+    # def render(self, mode='human'):
+    #     """
+    #     渲染环境状态
+    #     """
+    #     if mode == 'human':
+    #         print(f"Step: {self.current_step}")
+    #         print(f"Total Reward: {self.episode_reward}")
+    #         print("Drones:")
+    #         for i, drone in enumerate(self.drones):
+    #             print(f"  Drone {i}: Pos={drone.position}, Battery={drone.battery}, "
+    #                   f"Node={drone.current_node}, Status={drone.status}")
+    #         print("Nodes:")
+    #         for i, node in enumerate(self.nodes):
+    #             print(f"  Node {i}: Pos={node.position}, Searched={node.is_searched}, "
+    #                   f"Priority={node.search_priority}")
     
     def get_status(self):
         """

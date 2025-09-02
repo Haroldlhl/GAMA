@@ -5,6 +5,7 @@
 from dataclasses import dataclass
 from enum import Enum
 from typing import Dict, List, Optional, Set, Tuple
+from config_parse import Config
 
 Node_Type = Enum('Node_Type', ['room', 'hallway', 'stair', 'other'])
 def encode_node_type(node_type: Node_Type):

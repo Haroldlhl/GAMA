@@ -36,4 +36,5 @@ class Actor:
         attn_feature = torch.matmul(attn_scores, drone_features)
         # 计算动作, 实际是节点Idx
         action = torch.argmax(attn_feature)
-        return action
+        prob = attn_scores[action]
+        return action, prob, node_features, query_feature

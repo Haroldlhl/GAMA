@@ -5,6 +5,7 @@ from torch.distributions import Categorical
 import numpy as np
 from collections import deque
 import random
+from actor import Actor
 
 class PPO:
     def __init__(self, policy_net, value_net, agent_encoder, node_encoder, 
@@ -72,7 +73,7 @@ class PPO:
         
         return state
     
-    def select_action(self, state, drone_idx):
+    def select_action(self, state, event_queue, current_time):
         """
         选择动作
         
@@ -84,20 +85,13 @@ class PPO:
             动作, 动作的对数概率, 状态值
         """
         # 获取无人机特定状态
-        drone_state = state['drones'][drone_idx]
-        node_states = state['nodes']
+        state = self.get_state()
+        node_states, drone_states = state['nodes'], state['drones']
+        nxt_node_idx, prob, node_features, drone_query_feature = Actor.forward(state, event_queue, current_time)
         
-        # 通过策略网络获取动作概率
-        action_probs = self.policy_net(drone_state, node_states)
-        dist = Categorical(action_probs)
-        action = dist.sample()
-        
-        # 计算动作的对数概率
-        log_prob = dist.log_prob(action)
-        
-        # 通过价值网络获取状态值
-        value = self.value_net(drone_state, node_states)
-        
+        action = torch.tensor(nxt_node_idx)
+        log_prob = torch.log(prob)
+        value = self.value_net(node_features, drone_query_feature, nxt_node_idx)
         return action.item(), log_prob, value
     
     def store_transition(self, state, action, log_prob, value, reward, next_state, done):
@@ -376,23 +370,23 @@ class MultiDroneEnv:
 
 def train():
     """
-    训练函数
+    训练函数 - 支持矢量奖励版本
     """
     # 初始化环境
     num_drones = 3
     num_nodes = 10
     
     # 创建无人机和节点实例
-    drones = [Drone() for _ in range(num_drones)]  # 假设你已经实现了Drone类
-    nodes = [Node() for _ in range(num_nodes)]     # 假设你已经实现了Node类
+    drones = [Drone() for _ in range(num_drones)]
+    nodes = [Node() for _ in range(num_nodes)]
     
     env = MultiDroneEnv(drones, nodes)
     
     # 初始化网络
-    policy_net = PolicyNet()  # 假设你已经实现了PolicyNet
-    value_net = ValueNet()    # 假设你已经实现了ValueNet
-    agent_encoder = AgentEncoder()  # 假设你已经实现了AgentEncoder
-    node_encoder = NodeEncoder()    # 假设你已经实现了NodeEncoder
+    policy_net = PolicyNet()
+    value_net = ValueNet()
+    agent_encoder = AgentEncoder()
+    node_encoder = NodeEncoder()
     
     # 初始化PPO
     ppo = PPO(policy_net, value_net, agent_encoder, node_encoder)
@@ -404,28 +398,34 @@ def train():
     # 训练循环
     for episode in range(num_episodes):
         state = env.reset()
-        episode_reward = 0
+        episode_rewards = [0] * num_drones  # 改为矢量，每个无人机独立奖励
         
         for step in range(max_steps):
-            actions = []
-            log_probs = []
-            values = []
+            state = env.get_state()
+            curr_state = state.copy()
+            act_uav = env.event_queue.get_next_event()
+            act_uav_idx = env.drones.index(act_uav)
+            # 无人机选择动作
+            action, log_prob, value = ppo.select_action(state, env.event_queue, env.current_time)
+
             
-            # 每个无人机选择动作
-            for i in range(len(env.drones)):
-                action, log_prob, value = ppo.select_action(state, i)
-                actions.append(action)
-                log_probs.append(log_prob)
-                values.append(value)
+            # 执行动作 - 现在rewards是矢量 [drone1_reward, drone2_reward, ...]
+            next_state, reward, done = env.step(action)
             
-            # 执行动作
-            next_state, rewards, done, _ = env.step(actions)
-            episode_reward += sum(rewards)
+            # 更新执行动作的无人机的累计奖励
+            episode_rewards[act_uav_idx] += reward
             
-            # 存储经验
-            for i in range(len(env.drones)):
-                ppo.store_transition(state, actions[i], log_probs[i], values[i], 
-                                   rewards[i], next_state, done and i == len(env.drones)-1)
+            # 存储经验 - 每个无人机存储自己的奖励
+  
+            ppo.store_transition(
+                state=curr_state,
+                action=action,
+                log_prob=log_prob,
+                value=value,
+                reward=reward,  # 使用矢量奖励中的对应分量
+                next_state=next_state,
+                done=done
+            )
             
             state = next_state
             
@@ -434,9 +434,11 @@ def train():
                 ppo.update()
                 break
         
-        # 打印训练进度
+        # 打印训练进度 - 显示每个无人机的独立奖励和总奖励
         if episode % 10 == 0:
-            print(f"Episode {episode}, Total Reward: {episode_reward:.2f}")
+            total_reward = sum(episode_rewards)
+            reward_str = ", ".join([f"Drone{i}: {r:.2f}" for i, r in enumerate(episode_rewards)])
+            print(f"Episode {episode}, Total Reward: {total_reward:.2f}, Individual: [{reward_str}]")
     
     # 保存模型
     torch.save(policy_net.state_dict(), "policy_net.pth")
