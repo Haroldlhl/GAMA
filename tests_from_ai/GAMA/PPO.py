@@ -6,9 +6,12 @@ import numpy as np
 from collections import deque
 import random
 from actor import Actor
+from critic import ValueNetwork
+from environment import MultiDroneSearchEnv
+# from node import Node, Edge, WorldGraph
 
 class PPO:
-    def __init__(self, policy_net, value_net, agent_encoder, node_encoder, 
+    def __init__(self, policy_net, value_net, 
                  lr=3e-4, gamma=0.99, gae_lambda=0.95, 
                  clip_epsilon=0.2, ppo_epochs=4, batch_size=64):
         """
@@ -28,8 +31,8 @@ class PPO:
         """
         self.policy_net = policy_net
         self.value_net = value_net
-        self.agent_encoder = agent_encoder
-        self.node_encoder = node_encoder
+        # self.agent_encoder = agent_encoder
+        # self.node_encoder = node_encoder
         
         self.gamma = gamma
         self.gae_lambda = gae_lambda
@@ -42,36 +45,36 @@ class PPO:
         
         self.memory = []
         
-    def encode_state(self, drones, nodes):
-        """
-        编码状态
+    # def encode_state(self, drones, nodes):
+    #     """
+    #     编码状态
         
-        参数:
-            drones: 无人机列表
-            nodes: 节点列表
+    #     参数:
+    #         drones: 无人机列表
+    #         nodes: 节点列表
             
-        返回:
-            编码后的状态
-        """
-        # 编码无人机状态
-        drone_states = []
-        for drone in drones:
-            drone_states.append(self.agent_encoder.encode(drone))
-        drone_states = torch.stack(drone_states)
+    #     返回:
+    #         编码后的状态
+    #     """
+    #     # 编码无人机状态
+    #     drone_states = []
+    #     for drone in drones:
+    #         drone_states.append(self.agent_encoder.encode(drone))
+    #     drone_states = torch.stack(drone_states)
         
-        # 编码节点状态
-        node_states = []
-        for node in nodes:
-            node_states.append(self.node_encoder.encode(node))
-        node_states = torch.stack(node_states)
+    #     # 编码节点状态
+    #     node_states = []
+    #     for node in nodes:
+    #         node_states.append(self.node_encoder.encode(node))
+    #     node_states = torch.stack(node_states)
         
-        # 组合状态
-        state = {
-            'drones': drone_states,
-            'nodes': node_states
-        }
+    #     # 组合状态
+    #     state = {
+    #         'drones': drone_states,
+    #         'nodes': node_states
+    #     }
         
-        return state
+    #     return state
     
     def select_action(self, state, event_queue, current_time):
         """
@@ -87,7 +90,7 @@ class PPO:
         # 获取无人机特定状态
         state = self.get_state()
         node_states, drone_states = state['nodes'], state['drones']
-        nxt_node_idx, prob, node_features, drone_query_feature = Actor.forward(state, event_queue, current_time)
+        nxt_node_idx, prob, node_features, drone_query_feature = self.policy_net.forward(state, event_queue, current_time)
         
         action = torch.tensor(nxt_node_idx)
         log_prob = torch.log(prob)
@@ -259,7 +262,7 @@ class PPO:
         # 清空记忆
         self.memory = []
 
-class MultiDroneEnv:
+# class MultiDroneEnv:
     """
     多无人机环境类
     """
@@ -368,6 +371,70 @@ class MultiDroneEnv:
         
         return all_nodes_searched or max_steps_reached
 
+
+def create_test_env1():
+    node1 = {
+        'id': 'Node_1',
+        'unsearched_area': 0,
+        'searching_uav': 2,
+        'allowed_uav_numbe': 10,
+        'estimate_time': 0,
+    }
+    node2 = {
+        'id': 'Node_2',
+        'unsearched_area': 100,
+        'searching_uav': 0,
+        'allowed_uav_number': 1,
+        'estimate_time': 0,
+    }
+    node3 = {
+        'id': 'Node_3',
+        'unsearched_area': 100,
+        'searching_uav': 0,
+        'allowed_uav_number': 1,
+        'estimate_time': 0,
+    }
+    node4 = {
+        'id': 'Node_4',
+        'unsearched_area': 100,
+        'searching_uav': 0,
+        'allowed_uav_number': 1,
+        'estimate_time': 0,
+    }
+    node5 = {
+        'id': 'Node_5',
+        'unsearched_area': 100,
+        'searching_uav': 0,
+        'allowed_uav_number': 1,
+        'estimate_time': 0,
+    }
+
+
+    nodes = [node1, node2, node3, node4, node5, ]
+    drones = []
+    for i in range(2):
+        drone = {
+            'id': f'Drone_{i}',
+            'target_id': 'Node_1',
+            'status': 'idle',
+            'task_end_time': 0,
+        }
+        drones.append(drone)
+
+    matrix = [[0, 4, 7, 3, 6],
+            [4, 0, 3, 7, 10],
+            [7, 3, 0, 10, 13],
+            [3, 7, 10, 0, 9],
+            [6, 10, 13, 9, 0],
+        ]
+
+    distance_matrix = dict()
+    for i in range(1, 6):
+        distance_matrix[f"Node_{i}"] = dict()
+        for j in range(1, 6):
+            distance_matrix[f"Node_{i}"][f"Node_{j}"] = matrix[i-1][j-1]
+    return nodes, drones, distance_matrix
+
 def train():
     """
     训练函数 - 支持矢量奖励版本
@@ -377,19 +444,19 @@ def train():
     num_nodes = 10
     
     # 创建无人机和节点实例
-    drones = [Drone() for _ in range(num_drones)]
-    nodes = [Node() for _ in range(num_nodes)]
+    # drones = [Drone() for _ in range(num_drones)]
+    # nodes = [Node() for _ in range(num_nodes)]
+    nodes, drones, distance_matrix = create_test_env1()
     
-    env = MultiDroneEnv(drones, nodes)
+    env = MultiDroneSearchEnv(drones, nodes, distance_matrix)
     
     # 初始化网络
-    policy_net = PolicyNet()
-    value_net = ValueNet()
-    agent_encoder = AgentEncoder()
-    node_encoder = NodeEncoder()
+    policy_net = Actor()
+    value_net = ValueNetwork(d_model=128, num_heads=4, hidden_dim=256)
+
     
     # 初始化PPO
-    ppo = PPO(policy_net, value_net, agent_encoder, node_encoder)
+    ppo = PPO(policy_net, value_net)
     
     # 训练参数
     num_episodes = 1000
@@ -401,7 +468,7 @@ def train():
         episode_rewards = [0] * num_drones  # 改为矢量，每个无人机独立奖励
         
         for step in range(max_steps):
-            state = env.get_state()
+            state = env.get_state() # TODO get states 后 event 为空
             curr_state = state.copy()
             act_uav = env.event_queue.get_next_event()
             act_uav_idx = env.drones.index(act_uav)

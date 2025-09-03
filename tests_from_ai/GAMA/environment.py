@@ -16,7 +16,7 @@
 from dataclasses import dataclass
 from enum import Enum
 from typing import Dict, List, Optional, Set, Tuple
-from node import WorldGraph, Node, encode_node_type
+# from node import WorldGraph, Node, encode_node_type
 from drone import Drone, encode_uav_status
 from event_queue import EventQueue
 import torch
@@ -25,6 +25,21 @@ from actor import Actor
 
 def node_available(node):
     return node['allowed_uav_number'] > 0 and node['unsearched_area'] > 0
+
+class Node:
+    def __init__(self, id, unsearched_area, searching_uav, allowed_uav_number, estimate_time):
+        self.id = id
+        self.unsearched_area = unsearched_area
+        self.searching_uav = searching_uav
+        self.allowed_uav_number = allowed_uav_number
+        self.estimate_time = estimate_time
+
+class Drone:
+    def __init__(self, id, target_id, status, task_end_time):
+        self.id = id
+        self.target_id = target_id
+        self.status = status
+        self.task_end_time = task_end_time
 
 class MultiDroneSearchEnv:
     def __init__(self, drones, nodes, distance_matrix):
@@ -43,7 +58,7 @@ class MultiDroneSearchEnv:
         self.event_queue = EventQueue()
         self.distance_matrix = distance_matrix
         for drone in self.drones:
-            self.event_queue.add_event(drone.task_end_time, drone)
+            self.event_queue.add_event(drone['task_end_time'], drone)
         
     def reset(self):
         """
@@ -54,17 +69,29 @@ class MultiDroneSearchEnv:
         """
         # 重置所有无人机
         for drone in self.drones:
-            drone.reset()
+            drone['status'] = 'idle'
+            drone['task_end_time'] = 0
+            drone['target_id'] = 'Node_1'
         
         # 重置所有节点
         for node in self.nodes:
-            node.reset()
+            if node['id'] == 'Node_1':
+                node['unsearched_area'] = 0
+                node['searching_uav_number'] = 2
+                node['allowed_uav_number'] = 10
+                node['estimate_time'] = 0
+            else:
+                node['unsearched_area'] = 100
+                node['searching_uav_number'] = 0
+                node['allowed_uav_number'] = 1
+                node['estimate_time'] = 0
         
+        self.event_queue.clear()
         self.current_time = 0.0
         self.max_time = 1000.0
         self.episode_reward = 0.0
         for drone in self.drones:
-            self.event_queue.add_event(drone.task_end_time, drone)
+            self.event_queue.add_event(drone['task_end_time'], drone)
         
         return self.get_state()
 
@@ -91,10 +118,10 @@ class MultiDroneSearchEnv:
         drone_states = []
         for drone in self.drones:
             drone_state = {
-                'drone_id': drone.id,
-                'target_id': drone.target_id,
-                'status': drone.status,
-                'task_end_time': drone.task_end_time
+                'drone_id': drone['id'],
+                'target_id': drone['target_id'],
+                'status': drone['status'],
+                'task_end_time': drone['task_end_time']
             }
             drone_states.append(drone_state)
         
@@ -102,11 +129,11 @@ class MultiDroneSearchEnv:
         node_states = []
         for node in self.nodes:
             node_state = {
-                'node_id': node.id,
-                'unsearched_area': node.unsearched_area,
-                'searching_uav_number': node.searching_uav_number,
-                'allowed_uav_number': node.allowed_uav_number,
-                'estimate_time': node.estimate_time
+                'id': node['id'],
+                'unsearched_area': node['unsearched_area'],
+                'searching_uav_number': node['searching_uav_number'],
+                'allowed_uav_number': node['allowed_uav_number'],
+                'estimate_time': node['estimate_time']
             }
             node_states.append(node_state)
         
@@ -195,6 +222,14 @@ class MultiDroneSearchEnv:
             act_uav['task_end_time'] = current_time + self.distance_matrix[act_uav['current_node_id']][target_node['id']]
             act_uav['target_id'] = target_node['id']
             self.event_queue.add_event(act_uav['task_end_time'], act_uav)
+
+            # 计算奖励：不在目标房间， 1. 移动惩罚  2.搜索奖励*0.3  3.基础时间惩罚 
+            move_penal = -3 * (act_uav['task_end_time'] - current_time)
+            unsearch_estimate = target_node['unsearched_area'] / (10*target_node['searching_uav_number'])
+            search_time_estimate = unsearch_estimate / (10*(target_node['searching_uav_number']+1))
+            search_reward = 0.3 * 8 * search_time_estimate
+            base_tiem_penal = -1 * (current_time - act_uav['task_end_time'])
+            reward = move_penal + search_reward + base_tiem_penal
         else:
             # 无人机在目标房间
             if target_node['allowed_uav_number'] == 0 or target_node['unsearched_area'] == 0:
@@ -203,6 +238,10 @@ class MultiDroneSearchEnv:
                 act_uav['target_id'] = target_node['id']
                 act_uav['task_end_time'] = current_time + 10
                 self.event_queue.add_event(act_uav['task_end_time'], act_uav)
+                # 空闲惩罚与基础事件惩罚
+                reward = -3 * (act_uav['task_end_time'] - current_time)
+
+            # 搜索奖励
             elif target_node['searching_uav_number'] == 0:
                 act_uav['status'] = 'searching'
                 act_uav['target_id'] = target_node['id']
@@ -212,6 +251,8 @@ class MultiDroneSearchEnv:
                 act_uav['task_end_time'] = current_time + estimate_end_time
                 target_node.estimate_time = estimate_end_time+estimate_end_time
                 self.event_queue.add_event(act_uav['task_end_time'], act_uav)
+
+                reward = (8-1)*estimate_end_time
             else:
                 act_uav['target_id'] = target_node['id']
                 target_node['searching_uav_number'] += 1
@@ -230,21 +271,16 @@ class MultiDroneSearchEnv:
                 for drone in comp_drons:
                     drone['task_end_time'] = current_time + estimate_end_time
                     self.event_queue.add_event(drone['task_end_time'], drone)
+                
+                reward = (8-1)*estimate_end_time
 
         
 
-        # 更新房间状态, 计算奖励
+        # 更新房间状态, 计算奖励，给出的是决策点奖励
         nxt_time, _ = self.event_queue.get_next_event()
         elapsed_time = nxt_time - current_time
         for node in state['nodes']:
             node['unsearched_area'] -= elapsed_time * (10*node['searching_uav_number'])
-        
-        if act_uav['status'] == 'searching':
-            reward = 5*elapsed_time
-        elif act_uav['status'] == 'moving':
-            reward = -2*elapsed_time
-        elif act_uav['status'] == 'idle':
-            reward = -10*elapsed_time
         
         return state, reward
         
@@ -266,7 +302,7 @@ class MultiDroneSearchEnv:
         state = self.get_state()
         # 执行动作
         state, reward = self.act(state, action)
-        self.episode_reward = rewards
+        self.episode_reward = reward
 
         done_flag = self._is_done()
         if done_flag:

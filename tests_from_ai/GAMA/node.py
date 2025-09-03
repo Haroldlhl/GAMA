@@ -5,6 +5,8 @@
 from dataclasses import dataclass
 from enum import Enum
 from typing import Dict, List, Optional, Set, Tuple
+
+from torch_geometric.typing import NodeType
 from config_parse import Config
 
 Node_Type = Enum('Node_Type', ['room', 'hallway', 'stair', 'other'])
@@ -13,12 +15,29 @@ def encode_node_type(node_type: Node_Type):
     node_type_onehot[node_type.value - 1] = 1
     return node_type_onehot
 
+
+class NodeClass():
+    def __init__(self, id, unsearched_area, searching_uav, allowed_uav_number, estimate_time):
+        self.id = id
+        self.unsearched_area = unsearched_area
+        self.searching_uav = searching_uav
+        self.allowed_uav_number = allowed_uav_number
+        self.estimate_time = estimate_time
+
+
+def DroneClass():
+    def __init__(self, id, target_id, status, task_end_time):
+        self.id = id
+        self.target_id = target_id
+        self.status = status
+        self.task_end_time = task_end_time
+
 @dataclass
 class Node:
     id: str
-    type: Node_Type
-    area: float
-    floor: int
+    type: Node_Type='room'
+    area: float=100.0
+    floor: int=1
     config: Config
     unsearched_area: float=-1.0
     position: Tuple[float, float]=(0.0, 0.0)
@@ -29,6 +48,25 @@ class Node:
     allowed_uav_number: int = 3 # 最大允许无人机数量
     searching_uav: []
     last_change_time: float=0.0
+    estimate_time: float=-1.0
+    searching_uav: int=0
+
+    # def __init__(self, id, type, area, floor, config, unsearched_area, position, neigbors, degree, search_speed, difficulty_factor, allowed_uav_number, searching_uav, last_change_time, estimate_time):
+    #     self.id = id
+    #     self.type = type
+    #     self.area = area
+    #     self.floor = floor
+    #     self.config = config
+    #     self.unsearched_area = unsearched_area
+
+    # def __init__(self, id, unsearched_area, searching_uav, allowed_uav_number, estimate_time):
+    #     self.id = id
+    #     self.unsearched_area = unsearched_area
+    #     self.searching_uav = searching_uav
+    #     self.allowed_uav_number = allowed_uav_number
+    #     self.estimate_time = estimate_time
+
+
 
     def updata_unsearched_area(self, global_time):
         self.update_search_speed()
@@ -187,6 +225,26 @@ def test2():
         "Edge_4": Edge(id="Edge_4", source="Node_2", target="Node_6", length=1, weight=1.0, time_cost=1),
         "Edge_5": Edge(id="Edge_5", source="Node_6", target="Node_5", length=3, weight=1.0, time_cost=3),
         "Edge_6": Edge(id="Edge_6", source="Node_3", target="Node_5", length=2, weight=1.0, time_cost=2),
+    }
+    graph = WorldGraph(nodes, edges)
+    print(graph.format_shortest_paths())
+    
+def test3():
+    nodes = {
+        "Node_1": Node(id="Node_1", unsearched_area=0, searching_uav=2, allowed_uav_number=10, estimate_time=0),
+        "Node_2": Node(id="Node_2", unsearched_area=100, searching_uav=0, allowed_uav_number=1, estimate_time=0),
+        "Node_3": Node(id="Node_3", unsearched_area=100, searching_uav=0, allowed_uav_number=1, estimate_time=0),
+        "Node_4": Node(id="Node_4", unsearched_area=100, searching_uav=0, allowed_uav_number=1, estimate_time=0),
+        "Node_5": Node(id="Node_5", unsearched_area=100, searching_uav=0, allowed_uav_number=1, estimate_time=0),
+        "Node_6": Node(id="Node_6", unsearched_area=100, searching_uav=0, allowed_uav_number=1, estimate_time=0),
+    }
+    edges = {
+        "Edge_1": Edge(id="Edge_1", source="Node_1", target="Node_2", length=4, weight=1.0, time_cost=4),
+        "Edge_2": Edge(id="Edge_2", source="Node_1", target="Node_4", length=3, weight=1.0, time_cost=3),
+        "Edge_3": Edge(id="Edge_3", source="Node_1", target="Node_5", length=6, weight=1.0, time_cost=6),
+        "Edge_4": Edge(id="Edge_4", source="Node_2", target="Node_3", length=3, weight=1.0, time_cost=3),
+        # "Edge_5": Edge(id="Edge_5", source="Node_6", target="Node_5", length=3, weight=1.0, time_cost=3),
+        # "Edge_6": Edge(id="Edge_6", source="Node_3", target="Node_5", length=2, weight=1.0, time_cost=2),
     }
     graph = WorldGraph(nodes, edges)
     print(graph.format_shortest_paths())

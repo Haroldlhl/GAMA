@@ -12,7 +12,7 @@
 from dataclasses import dataclass
 from enum import Enum
 from event_queue import EventQueue
-from congig_parse import Config
+from config_parse import Config
 
 UAV_Status = Enum('UAV_Status', ['idle', 'searching', 'moving', 'pending'])
 # 只会给无人机下发节点任务，自行判断会转化为什么状态

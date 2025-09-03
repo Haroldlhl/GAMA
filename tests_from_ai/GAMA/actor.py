@@ -4,9 +4,9 @@ from nets import GATEncoder, FFNEncoder, MultiHeadAttention
 
 class Actor:
     def __init__(self):
-        self.GAT = GATEncoder()
-        self.ffn_encoder = FFNEncoder()
-        self.MultiHeadAttention = MultiHeadAttention()
+        self.GAT = GATEncoder(in_features=10, out_features=128, num_heads=4)
+        self.ffn_encoder = FFNEncoder(d_model=128, d_ff=256, dropout=0.1)
+        self.MultiHeadAttention = MultiHeadAttention(d_model=128, num_heads=4)
 
 
     def forward(self, state, event_queue, current_time):
