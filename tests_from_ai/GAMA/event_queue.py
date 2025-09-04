@@ -76,21 +76,8 @@ class EventQueue:
         if self.time_to_events:
             earliest_time = next(iter(self.time_to_events.keys()))
             events = self.time_to_events[earliest_time].copy()  # 复制列表
-            del self.time_to_events[earliest_time]
             
-            # 清理相关映射
-            for event in events:
-                event_id = self._get_event_id(event)
-                if event_id in self.event_to_time:
-                    del self.event_to_time[event_id]
-                
-                # 从事件标识列表中移除
-                for i, (e, e_id) in enumerate(self.event_identifiers):
-                    if e == event and e_id == event_id:
-                        del self.event_identifiers[i]
-                        break
-            
-            return earliest_time, events
+            return earliest_time, events[0]
         return None, None
     
     def clear(self):

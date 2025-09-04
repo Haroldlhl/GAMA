@@ -45,36 +45,6 @@ class PPO:
         
         self.memory = []
         
-    # def encode_state(self, drones, nodes):
-    #     """
-    #     编码状态
-        
-    #     参数:
-    #         drones: 无人机列表
-    #         nodes: 节点列表
-            
-    #     返回:
-    #         编码后的状态
-    #     """
-    #     # 编码无人机状态
-    #     drone_states = []
-    #     for drone in drones:
-    #         drone_states.append(self.agent_encoder.encode(drone))
-    #     drone_states = torch.stack(drone_states)
-        
-    #     # 编码节点状态
-    #     node_states = []
-    #     for node in nodes:
-    #         node_states.append(self.node_encoder.encode(node))
-    #     node_states = torch.stack(node_states)
-        
-    #     # 组合状态
-    #     state = {
-    #         'drones': drone_states,
-    #         'nodes': node_states
-    #     }
-        
-    #     return state
     
     def select_action(self, state, event_queue, current_time):
         """
@@ -262,114 +232,6 @@ class PPO:
         # 清空记忆
         self.memory = []
 
-# class MultiDroneEnv:
-    """
-    多无人机环境类
-    """
-    def __init__(self, drones, nodes):
-        self.drones = drones
-        self.nodes = nodes
-        self.current_step = 0
-        self.max_steps = 1000  # 最大步数
-        
-    def reset(self):
-        """重置环境"""
-        for drone in self.drones:
-            drone.reset()
-        for node in self.nodes:
-            node.reset()
-        self.current_step = 0
-        return self.get_state()
-    
-    def get_state(self):
-        """获取当前状态"""
-        # 这里需要根据你的具体实现来获取状态
-        # 假设你已经实现了获取状态的方法
-        state = {
-            'drones': [drone.get_state() for drone in self.drones],
-            'nodes': [node.get_state() for node in self.nodes]
-        }
-        return state
-    
-    def step(self, actions):
-        """
-        执行动作
-        
-        参数:
-            actions: 每个无人机的动作列表
-            
-        返回:
-            next_state: 下一个状态
-            rewards: 奖励列表
-            done: 是否结束
-            info: 额外信息
-        """
-        rewards = []
-        
-        # 每个无人机执行动作
-        for i, (drone, action) in enumerate(zip(self.drones, actions)):
-            # 更新无人机状态
-            drone.update(action)
-            
-            # 计算奖励
-            reward = self.compute_reward(drone, action)
-            rewards.append(reward)
-        
-        # 更新节点状态
-        for node in self.nodes:
-            node.update()
-        
-        # 检查是否结束
-        self.current_step += 1
-        done = self.is_done()
-        
-        next_state = self.get_state()
-        info = {}  # 可以添加一些额外信息
-        
-        return next_state, rewards, done, info
-    
-    def compute_reward(self, drone, action):
-        """
-        计算奖励
-        
-        参数:
-            drone: 无人机
-            action: 动作
-            
-        返回:
-            reward: 奖励值
-        """
-        # 这里需要根据你的任务设计奖励函数
-        # 例如: 搜索到新区域的奖励, 避免碰撞的惩罚, 能量消耗的惩罚等
-        reward = 0
-        
-        # 示例: 如果无人机搜索到了新节点，给予正奖励
-        if drone.has_discovered_new_node():
-            reward += 10
-        
-        # 示例: 如果无人机发生碰撞，给予负奖励
-        if drone.has_collision():
-            reward -= 5
-        
-        # 示例: 每一步消耗能量，给予小负奖励
-        reward -= 0.1
-        
-        return reward
-    
-    def is_done(self):
-        """
-        检查是否结束
-        
-        返回:
-            done: 是否结束
-        """
-        # 检查是否所有节点都被搜索过
-        all_nodes_searched = all(node.is_searched for node in self.nodes)
-        
-        # 检查是否达到最大步数
-        max_steps_reached = self.current_step >= self.max_steps
-        
-        return all_nodes_searched or max_steps_reached
 
 
 def create_test_env1():
@@ -380,9 +242,10 @@ def create_test_env1():
         'allowed_uav_numbe': 10,
         'estimate_time': 0,
     }
+
     node2 = {
         'id': 'Node_2',
-        'unsearched_area': 100,
+        'unsearched_area': 10,
         'searching_uav': 0,
         'allowed_uav_number': 1,
         'estimate_time': 0,
@@ -470,8 +333,14 @@ def train():
         for step in range(max_steps):
             state = env.get_state() # TODO get states 后 event 为空
             curr_state = state.copy()
-            act_uav = env.event_queue.get_next_event()
-            act_uav_idx = env.drones.index(act_uav)
+            _, act_uav = env.event_queue.get_next_event()
+            act_uav_idx = None
+            for i in range(len(env.drones)):
+                tmp_drone = env.drones[i]
+                if env.drones[i]['id'] == act_uav['id']:
+                    act_uav_idx = i
+                    break
+            assert act_uav_idx is not None, "无人机idx找不到"
             # 无人机选择动作
             action, log_prob, value = ppo.select_action(state, env.event_queue, env.current_time)
 
