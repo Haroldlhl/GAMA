@@ -11,7 +11,7 @@ from environment import MultiDroneSearchEnv
 # from node import Node, Edge, WorldGraph
 
 class PPO:
-    def __init__(self, policy_net, value_net, 
+    def __init__(self, policy_net, value_net, env,
                  lr=3e-4, gamma=0.99, gae_lambda=0.95, 
                  clip_epsilon=0.2, ppo_epochs=4, batch_size=64):
         """
@@ -31,6 +31,7 @@ class PPO:
         """
         self.policy_net = policy_net
         self.value_net = value_net
+        self.env = env
         # self.agent_encoder = agent_encoder
         # self.node_encoder = node_encoder
         
@@ -40,7 +41,7 @@ class PPO:
         self.ppo_epochs = ppo_epochs
         self.batch_size = batch_size
         
-        self.policy_optimizer = optim.Adam(policy_net.parameters(), lr=lr)
+        self.policy_optimizer = policy_net.get_optimizer()
         self.value_optimizer = optim.Adam(value_net.parameters(), lr=lr)
         
         self.memory = []
@@ -58,7 +59,7 @@ class PPO:
             动作, 动作的对数概率, 状态值
         """
         # 获取无人机特定状态
-        state = self.get_state()
+        state = self.env.get_state()
         node_states, drone_states = state['nodes'], state['drones']
         nxt_node_idx, prob, node_features, drone_query_feature = self.policy_net.forward(state, event_queue, current_time)
         
@@ -319,7 +320,7 @@ def train():
 
     
     # 初始化PPO
-    ppo = PPO(policy_net, value_net)
+    ppo = PPO(policy_net, value_net, env)
     
     # 训练参数
     num_episodes = 1000

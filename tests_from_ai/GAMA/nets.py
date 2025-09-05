@@ -51,10 +51,10 @@ class MultiHeadAttention(nn.Module):
         return output
 
 class FFNEncoder(nn.Module):
-    def __init__(self, d_model, d_ff, dropout=0.1):
+    def __init__(self, d_model, d_ff, d_out,dropout=0.1):
         super(FFNEncoder, self).__init__()
         self.linear1 = nn.Linear(d_model, d_ff)
-        self.linear2 = nn.Linear(d_ff, d_model)
+        self.linear2 = nn.Linear(d_ff, d_out)
         self.dropout = nn.Dropout(dropout)
         self.activation = nn.ReLU()
         
@@ -84,19 +84,19 @@ class GATEncoder(nn.Module):
         
         self.reset_parameters()
 
-        self.test_distance_matrix = np.array([[0, 4, 7, 3, 6],
+        self.test_distance_matrix = torch.tensor([[0, 4, 7, 3, 6],
                                                 [4, 0, 3, 7, 10],
                                                 [7, 3, 0, 10, 13],
                                                 [3, 7, 10, 0, 9],
                                                 [6, 10, 13, 9, 0],
-                                                ])
+                                                ], dtype=torch.float32)
         
     def reset_parameters(self):
         nn.init.xavier_uniform_(self.linear.weight)
         nn.init.xavier_uniform_(self.a)
         nn.init.zeros_(self.linear.bias)
         
-    def forward(self, h, adj_matrix, distance_matrix=None):
+    def forward(self, h, adj_matrix=None, distance_matrix=None):
         """
         Args:
             h: Node features [batch_size, num_nodes, in_features]
@@ -104,6 +104,18 @@ class GATEncoder(nn.Module):
             distance_matrix: Distance matrix between nodes [batch_size, num_nodes, num_nodes]
                            Smaller values indicate closer nodes
         """
+
+        if adj_matrix is None:
+            test_adj_matrix = [[1, 2, 0, 1, 5],
+                               [1, 1, 1, 0, 0],
+                               [0, 1, 1, 0, 0],
+                               [1, 0, 0, 1, 0],
+                               [1, 0, 0, 0, 1]]
+            test_adj_matrix = torch.tensor(test_adj_matrix, dtype=torch.float32)
+            adj_matrix = torch.tensor(test_adj_matrix, dtype=torch.float32)
+        if distance_matrix is None:
+            distance_matrix = self.test_distance_matrix
+
         batch_size, num_nodes, _ = h.size()
         
         # Linear transformation

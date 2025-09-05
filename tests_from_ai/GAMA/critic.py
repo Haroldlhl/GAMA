@@ -57,7 +57,7 @@ class ValueNetwork(nn.Module):
 
         # 准备无人机Query：增加序列维度以匹配Attention输入格式
         # [batch_size, d_model] -> [batch_size, 1, d_model]
-        agent_query = encoded_agent_query.unsqueeze(1)
+        agent_query = encoded_agent_query
 
         # 3. 核心：交叉注意力
         # 让无人机Query去“审视”所有增强后的节点
@@ -79,7 +79,7 @@ class ValueNetwork(nn.Module):
         # 5. 融合所有信息并预测Q值
         # 拼接：无人机Query， 交互表示， 被选节点特征
         combined_feat = torch.cat([
-            encoded_agent_query,      # 原始无人机意图
+            encoded_agent_query.squeeze(1),      # 原始无人机意图
             cross_attn_output,        # 无人机与所有节点交互后的摘要
             selected_node_feat        # 被选节点的全局增强特征
         ], dim=-1) # [batch_size, 3 * d_model]
